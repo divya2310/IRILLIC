@@ -40,7 +40,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: enableJsClass }} />
       </head>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

@@ -12,11 +12,23 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $localRoot = Join-Path $projectRoot ".local-postgres"
 $dataDir = Join-Path $localRoot "data"
 $envFile = Join-Path $projectRoot ".env.local"
-$pgBin = "C:\Program Files\PostgreSQL\16\bin"
+$pgBin = $env:PG_BIN
+if (-not $pgBin -or -not (Test-Path -LiteralPath (Join-Path $pgBin "initdb.exe"))) {
+  $discovered = Get-ChildItem -Path "C:\Program Files\PostgreSQL\*\bin\initdb.exe" -ErrorAction SilentlyContinue |
+    Sort-Object { try { [int]($_.Directory.Parent.Name) } catch { 0 } } -Descending |
+    Select-Object -First 1
+  if ($discovered) { $pgBin = $discovered.DirectoryName }
+}
+if (-not $pgBin) {
+  $cmd = Get-Command initdb.exe -ErrorAction SilentlyContinue
+  if ($cmd) { $pgBin = Split-Path -Parent $cmd.Source }
+}
+if (-not $pgBin -or -not (Test-Path -LiteralPath (Join-Path $pgBin "initdb.exe"))) {
+  throw "PostgreSQL is not found. Set PG_BIN or install PostgreSQL under 'C:\Program Files\PostgreSQL'."
+}
 $initDb = Join-Path $pgBin "initdb.exe"
 $psql = Join-Path $pgBin "psql.exe"
 $createdb = Join-Path $pgBin "createdb.exe"
-if (-not (Test-Path -LiteralPath $initDb)) { throw "PostgreSQL 16 is not installed at $pgBin" }
 New-Item -ItemType Directory -Path $localRoot -Force | Out-Null
 $clusterExists = Test-Path -LiteralPath (Join-Path $dataDir "PG_VERSION")
 
@@ -47,7 +59,7 @@ if (-not $clusterExists) {
 & (Join-Path $PSScriptRoot "start-local-db.ps1")
 $env:PGPASSWORD = $dbPassword
 $databaseExists = & $psql -h 127.0.0.1 -p 5433 -U irillic_app -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='irillic'"
-if ($databaseExists.Trim() -ne "1") {
+if ([string]::IsNullOrWhiteSpace($databaseExists) -or ("$databaseExists".Trim() -ne "1")) {
   & $createdb -h 127.0.0.1 -p 5433 -U irillic_app -O irillic_app irillic
   if ($LASTEXITCODE -ne 0) { throw "IRILLIC database creation failed." }
 }
